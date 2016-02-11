@@ -50,7 +50,7 @@ running_kernel = call('uname -r')
 remove_kernels = dict()
 for line in all_kernels.split("\n"):
     # match only installed kernels
-    matched = re.search('^ii\s+linux-image-[a-z-]*([\d.]+-\d+)-.*?$', line)
+    matched = re.search('^ii\s+linux-image-([\d.]+-\d+-[a-z]+)', line)
     if matched:
         # skip running kernel
         if matched.group(1) not in running_kernel:
@@ -58,7 +58,7 @@ for line in all_kernels.split("\n"):
 
 # sort kernels to remove (as segmented versions)
 remove_kernels = remove_kernels.keys()
-remove_kernels.sort(key=lambda s: map(int, re.split('[.-]', s)))
+remove_kernels.sort(key=lambda s: map(int, re.split('[.-]', re.split('-\D+$',s)[0])))
 
 for version in remove_kernels:
     print 'Found: %s\n' % version
@@ -70,16 +70,15 @@ if len(remove_kernels) > 2:
 # remove all files for given versions on /boot
 was_removed = False
 for version in remove_kernels:
-    # find & print any existing files for version
+    # attempt to purge version
     try:
-        to_be_removed = call('ls -1 /boot/*-%s-*' % version)
-        print 'Removing:\n%s' % to_be_removed
-    # fail gracefully if none found
-    except subprocess.CalledProcessError:
-        print 'No files to remove for %s' % version
-    # otherwise remove them with extreme prejudice
+        call('dpkg --purge linux-image-%s' % version)
+        call('dpkg --purge linux-headers-%s' % version)
+    # fail gracefully if purge is not successful
+    except subprocess.CalledProcessError as e:
+        print 'Purge failed: %s' % e.output
+    # otherwise note removal
     else:
-        call('rm -rf /boot/*-%s-*' % version)
         was_removed = True
 
 # rebuild grub boot configurations
